@@ -261,6 +261,20 @@ require('lazy').setup({
   'tpope/vim-sleuth', -- Detect tabstop and shiftwidth automatically
   'JetBrains/JetBrainsMono',
   { 'NMAC427/guess-indent.nvim', opts = {} },
+  {
+    'stevearc/oil.nvim',
+    dependencies = { 'nvim-tree/nvim-web-devicons' },
+    lazy = false,
+    opts = {
+      default_file_explorer = true,
+      view_options = {
+        show_hidden = true,
+      },
+    },
+    keys = {
+      { '-', '<cmd>Oil<cr>', desc = 'Open parent directory' },
+    },
+  },
   -- NOTE: Plugins can also be added by using a table,
   -- with the first argument being the link and the following
   -- keys can be used to configure plugin behavior/loading/etc.
@@ -331,17 +345,6 @@ require('lazy').setup({
       { '<leader>aa', '<cmd>ClaudeCodeDiffAccept<cr>', desc = 'Accept diff' },
       { '<leader>ad', '<cmd>ClaudeCodeDiffDeny<cr>', desc = 'Deny diff' },
     },
-  },
-  {
-    'ThePrimeagen/refactoring.nvim',
-    dependencies = {
-      'nvim-lua/plenary.nvim',
-      'nvim-treesitter/nvim-treesitter',
-    },
-    config = function()
-      local conf = {}
-      require('refactoring').setup(conf)
-    end,
   },
   {
     'joshuavial/aider.nvim',
@@ -439,37 +442,19 @@ require('lazy').setup({
       local set = vim.keymap.set
 
       -- Function to clear search highlighting
-      local function clear_search()
-        vim.cmd 'nohlsearch'
-      end
+      local function clear_search() vim.cmd 'nohlsearch' end
 
       -- Add or skip cursor above/below the main cursor.
-      set({ 'n', 'x' }, '<up>', function()
-        mc.lineAddCursor(-1)
-      end)
-      set({ 'n', 'x' }, '<down>', function()
-        mc.lineAddCursor(1)
-      end)
-      set({ 'n', 'x' }, '<leader><up>', function()
-        mc.lineSkipCursor(-1)
-      end)
-      set({ 'n', 'x' }, '<leader><down>', function()
-        mc.lineSkipCursor(1)
-      end)
+      set({ 'n', 'x' }, '<up>', function() mc.lineAddCursor(-1) end)
+      set({ 'n', 'x' }, '<down>', function() mc.lineAddCursor(1) end)
+      set({ 'n', 'x' }, '<leader><up>', function() mc.lineSkipCursor(-1) end)
+      set({ 'n', 'x' }, '<leader><down>', function() mc.lineSkipCursor(1) end)
 
       -- Add or skip adding a new cursor by matching word/selection
-      set({ 'n', 'x' }, '<leader>n', function()
-        mc.matchAddCursor(1)
-      end)
-      set({ 'n', 'x' }, '<leader>s', function()
-        mc.matchSkipCursor(1)
-      end)
-      set({ 'n', 'x' }, '<leader>N', function()
-        mc.matchAddCursor(-1)
-      end)
-      set({ 'n', 'x' }, '<leader>S', function()
-        mc.matchSkipCursor(-1)
-      end)
+      set({ 'n', 'x' }, '<leader>n', function() mc.matchAddCursor(1) end)
+      set({ 'n', 'x' }, '<leader>s', function() mc.matchSkipCursor(1) end)
+      set({ 'n', 'x' }, '<leader>N', function() mc.matchAddCursor(-1) end)
+      set({ 'n', 'x' }, '<leader>S', function() mc.matchSkipCursor(-1) end)
 
       -- In normal/visual mode, press `mwap` will create a cursor in every match of
       -- the word captured by `iw` (or visually selected range) inside the bigger
@@ -519,9 +504,7 @@ require('lazy').setup({
         clear_search()
 
         -- Then handle multicursor state if needed
-        if mc.hasCursors() then
-          mc.clearCursors()
-        end
+        if mc.hasCursors() then mc.clearCursors() end
       end)
 
       -- For command-line mode (including search)
@@ -531,16 +514,12 @@ require('lazy').setup({
 
         -- After exiting command mode, clear search highlighting
         -- We need to schedule this to run after returning to normal mode
-        vim.schedule(function()
-          clear_search()
-        end)
+        vim.schedule(function() clear_search() end)
       end)
 
       -- Add a dedicated mapping to enable cursors
       set('n', '<leader>me', function()
-        if not mc.cursorsEnabled() then
-          mc.enableCursors()
-        end
+        if not mc.cursorsEnabled() then mc.enableCursors() end
       end)
 
       -- bring back cursors if you accidentally clear them
@@ -560,12 +539,8 @@ require('lazy').setup({
       set('x', 'M', mc.matchCursors)
 
       -- Rotate visual selection contents.
-      set('x', '<leader>t', function()
-        mc.transposeCursors(1)
-      end)
-      set('x', '<leader>T', function()
-        mc.transposeCursors(-1)
-      end)
+      set('x', '<leader>t', function() mc.transposeCursors(1) end)
+      set('x', '<leader>T', function() mc.transposeCursors(-1) end)
 
       -- Jumplist support
       set({ 'x', 'n' }, '<c-i>', mc.jumpForward)
@@ -602,6 +577,17 @@ require('lazy').setup({
         zindex = 20, -- The Z-index of the context window
         on_attach = nil, -- (fun(buf: integer): boolean) return false to disable attaching
       }
+    end,
+  },
+  {
+    'ThePrimeagen/refactoring.nvim',
+    dependencies = {
+      'nvim-lua/plenary.nvim',
+      'nvim-treesitter/nvim-treesitter',
+    },
+    config = function()
+      local conf = {}
+      require('refactoring').setup(conf)
     end,
   },
   -- NOTE: Plugins can specify dependencies.
@@ -795,8 +781,6 @@ require('lazy').setup({
   },
   -- LSP status updates
   { 'j-hui/fidget.nvim', opts = {} },
-  -- Completion capabilities for LSP
-  { 'hrsh7th/cmp-nvim-lsp' },
 
   { -- Autoformat
     'stevearc/conform.nvim',
@@ -1067,9 +1051,9 @@ require('lazy').setup({
 -- Native LSP Configuration (Neovim 0.11+)
 -- ============================================================================
 
--- Set global LSP capabilities (includes nvim-cmp completions)
+-- Set global LSP capabilities (includes blink.cmp completions)
 local capabilities = vim.lsp.protocol.make_client_capabilities()
-capabilities = vim.tbl_deep_extend('force', capabilities, require('cmp_nvim_lsp').default_capabilities())
+capabilities = vim.tbl_deep_extend('force', capabilities, require('blink.cmp').get_lsp_capabilities())
 capabilities.general = capabilities.general or {}
 capabilities.general.positionEncodings = { 'utf-16' }
 
@@ -1133,9 +1117,7 @@ vim.api.nvim_create_autocmd('LspAttach', {
       client.server_capabilities.documentSymbolProvider = false
       client.server_capabilities.renameProvider = false
       -- Ensure semantic tokens are enabled for global variable highlighting
-      if client.server_capabilities.semanticTokensProvider then
-        vim.lsp.semantic_tokens.start(event.buf, client.id)
-      end
+      if client.server_capabilities.semanticTokensProvider then vim.lsp.semantic_tokens.start(event.buf, client.id) end
     end
 
     if client and client.name == 'ruff' then
@@ -1189,9 +1171,7 @@ vim.api.nvim_create_autocmd('LspAttach', {
 
     -- Toggle inlay hints
     if client and client.supports_method(vim.lsp.protocol.Methods.textDocument_inlayHint) then
-      map('<leader>th', function()
-        vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled { bufnr = event.buf })
-      end, '[T]oggle Inlay [H]ints')
+      map('<leader>th', function() vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled { bufnr = event.buf }) end, '[T]oggle Inlay [H]ints')
     end
   end,
 })
@@ -1209,9 +1189,7 @@ vim.keymap.set('n', 'gn', '<cmd>tab split | lua vim.lsp.buf.definition()<CR>', {
 vim.api.nvim_create_autocmd('VimLeavePre', {
   callback = function()
     local filepath = vim.fn.expand '%:p'
-    if filepath ~= '' then
-      vim.fn.writefile({ filepath }, '/tmp/nvim_last_closed')
-    end
+    if filepath ~= '' then vim.fn.writefile({ filepath }, '/tmp/nvim_last_closed') end
   end,
 })
 -- Set 'jb' as your default global colorscheme

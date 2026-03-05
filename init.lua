@@ -417,7 +417,6 @@ require('lazy').setup({
           F12 = '<F12>',
         },
       },
-     },
       -- Document existing key chains
       spec = {
         { '<leader>s', group = '[S]earch', mode = { 'n', 'v' } },

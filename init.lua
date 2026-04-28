@@ -775,7 +775,7 @@ require('lazy').setup({
     config = function()
       require('mason').setup()
       require('mason-tool-installer').setup {
-        ensure_installed = { 'ruff', 'ty', 'basedpyright', 'stylua' },
+        ensure_installed = { 'ruff', 'ty', 'basedpyright', 'stylua', 'typescript-language-server', 'json-lsp', 'yaml-language-server' },
       }
     end,
   },
@@ -977,7 +977,24 @@ require('lazy').setup({
     branch = 'main',
     -- [[ Configure Treesitter ]] See `:help nvim-treesitter-intro`
     config = function()
-      local parsers = { 'bash', 'c', 'diff', 'html', 'javascript', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'python', 'query', 'typescript', 'vim', 'vimdoc' }
+      local parsers = {
+        'bash',
+        'c',
+        'diff',
+        'html',
+        'javascript',
+        'json',
+        'lua',
+        'luadoc',
+        'markdown',
+        'markdown_inline',
+        'python',
+        'query',
+        'typescript',
+        'vim',
+        'vimdoc',
+        'yaml',
+      }
       require('nvim-treesitter').install(parsers)
       vim.api.nvim_create_autocmd('FileType', {
         callback = function(args)
@@ -1085,7 +1102,7 @@ vim.lsp.config('basedpyright', {
     basedpyright = {
       analysis = {
         typeCheckingMode = 'off',
-        diagnosticMode = 'openFilesOnly',
+        diagnosticMode = 'workspace',
         autoSearchPaths = true,
         useLibraryCodeForTypes = true,
         autoImportCompletions = true,
@@ -1099,7 +1116,36 @@ vim.lsp.config('basedpyright', {
 })
 
 -- Enable the LSP servers
-vim.lsp.enable { 'ruff', 'ty', 'basedpyright' }
+vim.lsp.config('ts_ls', {
+  cmd = { 'typescript-language-server', '--stdio' },
+  filetypes = { 'javascript', 'javascriptreact', 'javascript.jsx', 'typescript', 'typescriptreact', 'typescript.tsx' },
+  root_markers = { 'tsconfig.json', 'jsconfig.json', 'package.json', '.git' },
+})
+
+-- Configure jsonls
+vim.lsp.config('jsonls', {
+  cmd = { 'vscode-json-language-server', '--stdio' },
+  filetypes = { 'json', 'jsonc' },
+  root_markers = { '.git' },
+})
+
+-- Configure yamlls
+vim.lsp.config('yamlls', {
+  cmd = { 'yaml-language-server', '--stdio' },
+  filetypes = { 'yaml', 'yaml.docker-compose', 'yaml.gitlab' },
+  root_markers = { '.git' },
+  settings = {
+    yaml = {
+      validate = true,
+      schemaStore = {
+        enable = true,
+      },
+    },
+  },
+})
+
+-- Enable the LSP servers
+vim.lsp.enable { 'ruff', 'ty', 'basedpyright', 'ts_ls', 'jsonls', 'yamlls' }
 
 -- LspAttach autocmd for keymaps and server-specific behavior
 vim.api.nvim_create_autocmd('LspAttach', {
@@ -1112,7 +1158,7 @@ vim.api.nvim_create_autocmd('LspAttach', {
       -- Disable most features (ty handles them), but keep completions for auto-import
       client.server_capabilities.definitionProvider = false
       client.server_capabilities.referencesProvider = false
-      client.server_capabilities.hoverProvider = false
+      client.server_capabilities.hoverProvider = true
       client.server_capabilities.signatureHelpProvider = false
       client.server_capabilities.documentSymbolProvider = false
       client.server_capabilities.renameProvider = false
@@ -1129,6 +1175,7 @@ vim.api.nvim_create_autocmd('LspAttach', {
       -- Disable semantic tokens and completions so basedpyright handles them (avoids conflicts)
       client.server_capabilities.semanticTokensProvider = nil
       client.server_capabilities.completionProvider = nil
+      client.server_capabilities.hoverProvider = false
     end
 
     -- LSP keymaps
@@ -1136,6 +1183,13 @@ vim.api.nvim_create_autocmd('LspAttach', {
       mode = mode or 'n'
       vim.keymap.set(mode, keys, func, { buffer = event.buf, desc = 'LSP: ' .. desc })
     end
+
+    map('<leader>lr', function()
+      for _, c in ipairs(vim.lsp.get_clients { name = 'ty' }) do
+        c:stop()
+        vim.defer_fn(function() vim.lsp.enable 'ty' end, 500)
+      end
+    end, 'Restart ty [L]SP')
 
     map('gd', require('telescope.builtin').lsp_definitions, '[G]oto [D]efinition')
     map('gr', require('telescope.builtin').lsp_references, '[G]oto [R]eferences')
@@ -1146,6 +1200,62 @@ vim.api.nvim_create_autocmd('LspAttach', {
     map('<leader>rn', vim.lsp.buf.rename, '[R]e[n]ame')
     map('<leader>ca', vim.lsp.buf.code_action, '[C]ode [A]ction', { 'n', 'x' })
     map('gD', vim.lsp.buf.declaration, '[G]oto [D]eclaration')
+
+    map('M', function()
+      vim.lsp.buf.definition {
+        on_list = function(options)
+          local item = options.items[1]
+          if not item then return end
+          local bufnr = vim.uri_to_bufnr(vim.uri_from_fname(item.filename))
+          vim.fn.bufload(bufnr)
+          local start_line = math.max(item.lnum - 1, 0)
+          local ft = vim.api.nvim_buf_get_option(bufnr, 'filetype')
+
+          local end_line = start_line
+          local ok, parser = pcall(vim.treesitter.get_parser, bufnr, ft)
+          if ok and parser then
+            local tree = parser:parse()[1]
+            local root = tree:root()
+            local col = item.col and (item.col - 1) or 0
+            local node = root:descendant_for_range(start_line, col, start_line, col)
+            local def_types = {
+              class_definition = true,
+              function_definition = true,
+              method_definition = true,
+              decorated_definition = true,
+              class_declaration = true,
+              function_declaration = true,
+              method_declaration = true,
+              arrow_function = true,
+              function_expression = true,
+            }
+            while node do
+              if def_types[node:type()] then
+                local er = node:end_()
+                end_line = er
+                break
+              end
+              node = node:parent()
+            end
+          end
+
+          local max_lines = 60
+          local last = math.min(start_line + max_lines, end_line)
+          if last < start_line then last = start_line end
+          local lines = vim.api.nvim_buf_get_lines(bufnr, start_line, last + 1, false)
+          local height = math.min(#lines, max_lines)
+
+          local pbuf, pwin = vim.lsp.util.open_floating_preview(lines, ft, {
+            border = 'rounded',
+            max_width = 120,
+            max_height = height,
+            focusable = true,
+          })
+          pcall(vim.treesitter.start, pbuf, ft)
+          vim.api.nvim_set_option_value('winhighlight', 'Normal:Normal,FloatBorder:FloatBorder', { win = pwin })
+        end,
+      }
+    end, 'Peek Definition')
 
     -- Highlight references on CursorHold
     if client and client.supports_method(vim.lsp.protocol.Methods.textDocument_documentHighlight) then
